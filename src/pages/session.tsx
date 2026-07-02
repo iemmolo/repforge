@@ -19,15 +19,6 @@ export default function SessionPage() {
   const [celebration, setCelebration] = useState<{ workoutName: string; prs: PR[] } | null>(null)
 
   const session = state.session
-  if (celebration) {
-    return (
-      <Celebration
-        workoutName={celebration.workoutName}
-        prs={celebration.prs}
-        onClose={() => navigate("/", { replace: true })}
-      />
-    )
-  }
   if (!session) {
     // finished or discarded — nothing to render here
     return null
@@ -64,12 +55,17 @@ export default function SessionPage() {
     }
   }
 
+  // the session is logged when the celebration is dismissed, so the
+  // finished workout stays visible behind the overlay
   function finish() {
     if (!session) return
-    const prs = detectPRs(session, state.logs)
-    dispatch({ type: "completeSession" })
     setTimer(null)
-    setCelebration({ workoutName: session.workoutName, prs })
+    setCelebration({ workoutName: session.workoutName, prs: detectPRs(session, state.logs) })
+  }
+
+  function dismissCelebration() {
+    dispatch({ type: "completeSession" })
+    navigate("/", { replace: true })
   }
 
   function discard() {
@@ -215,6 +211,14 @@ export default function SessionPage() {
       >
         <CheckCircle2 className="h-5 w-5" /> Finish workout
       </button>
+
+      {celebration && (
+        <Celebration
+          workoutName={celebration.workoutName}
+          prs={celebration.prs}
+          onClose={dismissCelebration}
+        />
+      )}
 
       <RestTimerBar
         timer={timer}

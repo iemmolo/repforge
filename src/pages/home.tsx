@@ -4,7 +4,7 @@ import { ArrowUpRight, ChevronRight, Flame, Footprints, Play, TrendingUp } from 
 import { weeklyStreak } from "@/lib/gamify"
 import { Stepper } from "@/components/stepper"
 import { buildSession, nextCycleWorkout, useActiveProgram, useStore } from "@/lib/store"
-import { suggestionsForProgram } from "@/lib/progression"
+import { suggestionKey, suggestionsForProgram } from "@/lib/progression"
 import {
   DAY_LABELS,
   WEEK_DAYS,
@@ -28,10 +28,12 @@ export default function HomePage() {
     : program.workouts.find((w) => w.id === program.schedule[today])
   const others = program.workouts.filter((w) => w.id !== scheduled?.id)
 
-  const suggestions = useMemo(
-    () => suggestionsForProgram(program, state.logs),
-    [program, state.logs],
-  )
+  const suggestions = useMemo(() => {
+    const dismissed = new Set(state.dismissedSuggestions ?? [])
+    return suggestionsForProgram(program, state.logs).filter(
+      (s) => !dismissed.has(suggestionKey(program.id, s)),
+    )
+  }, [program, state.logs, state.dismissedSuggestions])
 
   const weekLogs = logsThisWeek(state.logs)
   // quick-logged cardio (programId "") doesn't count toward the program target
@@ -170,13 +172,27 @@ export default function HomePage() {
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-volt">
               <TrendingUp className="h-3.5 w-3.5" /> Time to move up
             </p>
-            <button
-              type="button"
-              className="rounded bg-volt px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-carbon active:opacity-80"
-              onClick={applyAllSuggestions}
-            >
-              Apply all
-            </button>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                className="rounded bg-volt px-2.5 py-1.5 text-[11px] font-bold uppercase tracking-wide text-carbon active:opacity-80"
+                onClick={applyAllSuggestions}
+              >
+                Apply all
+              </button>
+              <button
+                type="button"
+                className="rounded border border-line px-2 py-1.5 text-[11px] font-bold uppercase tracking-wide text-dim active:bg-raised"
+                onClick={() =>
+                  dispatch({
+                    type: "dismissSuggestions",
+                    keys: suggestions.map((s) => suggestionKey(program.id, s)),
+                  })
+                }
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
           <ul className="mt-2 space-y-1">
             {suggestions.map((s) => (

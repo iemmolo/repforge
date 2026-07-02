@@ -15,6 +15,7 @@ type Action =
   | { type: "discardSession" }
   | { type: "completeSession" }
   | { type: "toggleFavorite"; programId: string }
+  | { type: "dismissSuggestions"; keys: string[] }
   | { type: "logCardio"; cardioType: CardioType; minutes: number; distanceKm?: number }
   | { type: "restoreProgram"; programId: string }
   | { type: "deleteLog"; logId: string }
@@ -79,6 +80,13 @@ function reducer(state: AppState, action: Action): AppState {
         programs: state.programs.map((p) =>
           p.id === action.programId ? { ...p, favorite: !p.favorite } : p,
         ),
+      }
+    case "dismissSuggestions":
+      return {
+        ...state,
+        dismissedSuggestions: [
+          ...new Set([...(state.dismissedSuggestions ?? []), ...action.keys]),
+        ],
       }
     case "logCardio": {
       // quick-logged cardio: programId "" keeps it out of weekly adherence

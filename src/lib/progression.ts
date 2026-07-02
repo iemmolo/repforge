@@ -8,6 +8,11 @@ export interface Suggestion {
   suggestedKg: number
 }
 
+/** Stable identity for a suggestion — changes when the weights involved change. */
+export function suggestionKey(programId: string, s: Suggestion): string {
+  return `${programId}:${s.workoutId}:${s.exerciseId}:${s.suggestedKg}`
+}
+
 /**
  * An exercise earns a weight bump when, in its most recent completed log for
  * this program, every set was done at (or above) the current target weight

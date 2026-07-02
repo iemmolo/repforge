@@ -94,4 +94,6 @@ export interface AppState {
   activeProgramId: string
   logs: WorkoutLog[]
   session: Session | null
+  /** signatures of progression suggestions the user has dismissed */
+  dismissedSuggestions?: string[]
 }
