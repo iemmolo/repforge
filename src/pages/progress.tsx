@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react"
-import { useStore } from "@/lib/store"
+import { Award, Dumbbell, Flame, Footprints, TrendingUp, Weight } from "lucide-react"
+import { useActiveProgram, useStore } from "@/lib/store"
+import { badges, heatmap, weeklyStreak, type BadgeKind } from "@/lib/gamify"
 import { fmtDate, fmtKg } from "@/lib/utils"
 
 interface Point {
@@ -9,6 +11,127 @@ interface Point {
 }
 
 export default function ProgressPage() {
+  const { state } = useStore()
+  const program = useActiveProgram()
+
+  const weekTarget =
+    program.scheduleMode === "cycle"
+      ? (program.daysPerWeek ?? 3)
+      : Object.keys(program.schedule).length || 3
+  const streak = weeklyStreak(state.logs, weekTarget)
+  const grid = useMemo(() => heatmap(state.logs), [state.logs])
+  const badgeList = useMemo(() => badges(state.logs, streak.weeks), [state.logs, streak.weeks])
+  const earned = badgeList.filter((b) => b.earned).length
+
+  return (
+    <div className="space-y-4">
+      <h1 className="font-display text-2xl">Progress</h1>
+
+      {/* Consistency */}
+      <div className="animate-rise border border-line bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-dim">Consistency</p>
+          <p className="font-mono text-xs font-bold tabular text-dim">
+            this week {streak.thisWeekCount}/{weekTarget}
+          </p>
+        </div>
+
+        <div className="mt-3 flex items-center gap-3">
+          <Flame
+            className={`h-10 w-10 ${streak.weeks > 0 ? "text-volt" : "text-faint"}`}
+            fill={streak.weeks > 0 ? "currentColor" : "none"}
+          />
+          <div>
+            <p className="font-mono text-3xl font-bold tabular leading-none">
+              {streak.weeks}
+              <span className="ml-1 text-sm text-dim">wk</span>
+            </p>
+            <p className="text-xs text-dim">
+              {streak.weeks === 0
+                ? `Hit ${weekTarget} sessions this week to light the flame`
+                : streak.thisWeekHit
+                  ? "Week complete — streak safe"
+                  : `${weekTarget - streak.thisWeekCount} more this week to keep it alive`}
+            </p>
+          </div>
+        </div>
+
+        {/* heatmap: 16 weeks, Mon–Sun rows */}
+        <div className="mt-4 flex gap-[3px]">
+          {grid.map((week, wi) => (
+            <div key={wi} className="flex min-w-0 flex-1 flex-col gap-[3px]">
+              {week.map((day) => (
+                <div
+                  key={day.date}
+                  title={day.date}
+                  className={`aspect-square w-full rounded-[2px] ${
+                    day.level === 2
+                      ? "bg-volt"
+                      : day.level === 1
+                        ? "bg-volt-dim/50"
+                        : day.level === 0
+                          ? "bg-raised"
+                          : "bg-transparent"
+                  }`}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="mt-1.5 flex justify-between font-mono text-[10px] font-bold text-faint">
+          <span>{fmtDate(grid[0][0].date)}</span>
+          <span>today</span>
+        </div>
+      </div>
+
+      <LiftCharts />
+
+      {/* Badges */}
+      <div className="animate-rise stagger-2 border border-line bg-surface p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-dim">Badges</p>
+          <p className="font-mono text-xs font-bold tabular text-dim">
+            {earned}/{badgeList.length}
+          </p>
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-2">
+          {badgeList.map((b) => (
+            <div
+              key={b.id}
+              title={b.desc}
+              className={`flex flex-col items-center gap-1 border p-2 text-center ${
+                b.earned ? "border-volt-dim/60 bg-raised/60" : "border-line/60 opacity-40"
+              }`}
+            >
+              <BadgeIcon kind={b.kind} earned={b.earned} />
+              <p className="text-[9px] font-semibold uppercase leading-tight tracking-wide">
+                {b.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function BadgeIcon({ kind, earned }: { kind: BadgeKind; earned: boolean }) {
+  const cls = `h-5 w-5 ${earned ? "text-volt" : "text-faint"}`
+  switch (kind) {
+    case "sessions":
+      return <Dumbbell className={cls} />
+    case "streak":
+      return <Flame className={cls} />
+    case "pr":
+      return <Award className={cls} />
+    case "cardio":
+      return <Footprints className={cls} />
+    case "volume":
+      return <Weight className={cls} />
+  }
+}
+
+function LiftCharts() {
   const { state } = useStore()
 
   // every exercise name that has at least one completed set, most recent first
@@ -48,9 +171,9 @@ export default function ProgressPage() {
 
   if (exerciseNames.length === 0) {
     return (
-      <div className="animate-rise mt-16 text-center">
-        <p className="font-display text-3xl text-faint">Nothing to chart</p>
-        <p className="mt-2 text-sm text-dim">Log a few workouts and your lifts will graph here.</p>
+      <div className="animate-rise stagger-1 flex items-center gap-2 border border-line bg-surface p-4 text-sm text-dim">
+        <TrendingUp className="h-4 w-4 shrink-0" />
+        Log a few workouts and your lifts will graph here.
       </div>
     )
   }
@@ -60,10 +183,8 @@ export default function ProgressPage() {
   const delta = latest && first ? latest.topKg - first.topKg : 0
 
   return (
-    <div className="space-y-4">
-      <h1 className="font-display text-2xl">Progress</h1>
-
-      <div className="animate-rise flex gap-2 overflow-x-auto pb-1">
+    <div className="animate-rise stagger-1 space-y-3">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {exerciseNames.map((name) => (
           <button
             key={name}
@@ -81,7 +202,7 @@ export default function ProgressPage() {
       </div>
 
       {latest && (
-        <div className="animate-rise stagger-1 grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <Stat label="Top set" value={`${fmtKg(latest.topKg)}kg`} />
           <Stat
             label="Change"
@@ -93,22 +214,6 @@ export default function ProgressPage() {
       )}
 
       <Chart points={points} />
-
-      {points.length > 0 && (
-        <div className="animate-rise stagger-3 border border-line bg-surface">
-          {[...points].reverse().slice(0, 10).map((p, i) => (
-            <div
-              key={`${p.date}-${i}`}
-              className="flex items-center justify-between border-b border-line/60 px-4 py-2.5 text-sm last:border-0"
-            >
-              <span className="text-dim">{fmtDate(p.date)}</span>
-              <span className="font-mono text-xs font-bold tabular">
-                {fmtKg(p.topKg)}kg top · {fmtKg(p.volume)}kg vol
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -129,7 +234,7 @@ function Chart({ points }: { points: Point[] }) {
 
   if (points.length < 2) {
     return (
-      <div className="animate-rise stagger-2 flex h-36 items-center justify-center border border-line bg-surface text-sm text-dim">
+      <div className="flex h-36 items-center justify-center border border-line bg-surface text-sm text-dim">
         Two or more sessions needed for a trend line.
       </div>
     )
@@ -144,7 +249,7 @@ function Chart({ points }: { points: Point[] }) {
   const area = `${path} L${x(points.length - 1)},${H - PAD} L${x(0)},${H - PAD} Z`
 
   return (
-    <div className="animate-rise stagger-2 border border-line bg-surface p-3">
+    <div className="border border-line bg-surface p-3">
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
         <path d={area} fill="var(--color-volt)" opacity="0.08" />
         <path

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowUpRight, ChevronRight, Footprints, Play, TrendingUp } from "lucide-react"
+import { ArrowUpRight, ChevronRight, Flame, Footprints, Play, TrendingUp } from "lucide-react"
+import { weeklyStreak } from "@/lib/gamify"
 import { Stepper } from "@/components/stepper"
 import { buildSession, nextCycleWorkout, useActiveProgram, useStore } from "@/lib/store"
 import { suggestionsForProgram } from "@/lib/progression"
@@ -39,6 +40,7 @@ export default function HomePage() {
   const weekTarget = isCycle
     ? (program.daysPerWeek ?? 3)
     : Object.keys(program.schedule).length || 3
+  const streak = weeklyStreak(state.logs, weekTarget)
   const trainedDays = new Set(weekSessions.map((l) => dayOfWeek(new Date(l.date + "T12:00:00"))))
 
   function start(workout: Workout) {
@@ -78,7 +80,15 @@ export default function HomePage() {
       {/* Week adherence */}
       <div className="animate-rise stagger-1 border border-line bg-surface p-4">
         <div className="flex items-baseline justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-dim">This week</p>
+          <p className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-wider text-dim">
+            This week
+            {streak.weeks > 0 && (
+              <span className="flex items-center gap-0.5 font-mono text-xs font-bold normal-case tracking-normal text-volt">
+                <Flame className="h-3.5 w-3.5" fill="currentColor" />
+                {streak.weeks} wk
+              </span>
+            )}
+          </p>
           <p className="font-mono text-sm font-bold tabular">
             <span className={weekSessions.length >= weekTarget ? "text-volt" : ""}>
               {weekSessions.length}

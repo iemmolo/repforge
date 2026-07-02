@@ -90,6 +90,21 @@ body::after {
   }
 }
 
+@keyframes confetti-fall {
+  0% {
+    transform: translateY(-8vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(108vh) rotate(680deg);
+    opacity: 0.6;
+  }
+}
+
+@utility animate-confetti {
+  animation: confetti-fall 3s linear both;
+}
+
 @keyframes timer-pulse {
   0%,
   100% {

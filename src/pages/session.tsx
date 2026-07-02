@@ -4,7 +4,9 @@ import { Check, CheckCircle2, Footprints, X } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { Stepper } from "@/components/stepper"
 import { Confirm } from "@/components/confirm"
+import { Celebration } from "@/components/celebration"
 import { RestTimerBar, type RestTimer } from "@/components/rest-timer"
+import { detectPRs, type PR } from "@/lib/gamify"
 import { CARDIO_LABELS, completionPercent } from "@/lib/utils"
 import type { ExerciseLog, Session } from "@/types"
 
@@ -14,8 +16,18 @@ export default function SessionPage() {
   const [timer, setTimer] = useState<RestTimer | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
+  const [celebration, setCelebration] = useState<{ workoutName: string; prs: PR[] } | null>(null)
 
   const session = state.session
+  if (celebration) {
+    return (
+      <Celebration
+        workoutName={celebration.workoutName}
+        prs={celebration.prs}
+        onClose={() => navigate("/", { replace: true })}
+      />
+    )
+  }
   if (!session) {
     // finished or discarded — nothing to render here
     return null
@@ -53,8 +65,11 @@ export default function SessionPage() {
   }
 
   function finish() {
+    if (!session) return
+    const prs = detectPRs(session, state.logs)
     dispatch({ type: "completeSession" })
-    navigate("/", { replace: true })
+    setTimer(null)
+    setCelebration({ workoutName: session.workoutName, prs })
   }
 
   function discard() {
