@@ -561,5 +561,6 @@ export function seedState(): AppState {
     activeProgramId: foundationStrength.id,
     logs: [],
     session: null,
+    onboarded: false,
   }
 }

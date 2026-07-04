@@ -1,19 +1,38 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Check, CheckCircle2, Footprints, X } from "lucide-react"
+import { Check, CheckCircle2, ChevronDown, Footprints, X } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { Stepper } from "@/components/stepper"
 import { Confirm } from "@/components/confirm"
 import { Celebration } from "@/components/celebration"
 import { RestTimerBar, type RestTimer } from "@/components/rest-timer"
 import { detectPRs, type PR } from "@/lib/gamify"
-import { CARDIO_LABELS, completionPercent } from "@/lib/utils"
-import type { ExerciseLog, Session } from "@/types"
+import { BAR_KG, CARDIO_LABELS, completionPercent, fmtDate, fmtKg, platesPerSide } from "@/lib/utils"
+import type { ExerciseLog, Session, WorkoutLog } from "@/types"
+
+/** Last n outings for this exercise (matched by name, newest first). */
+function recentHistory(logs: WorkoutLog[], name: string, n = 3) {
+  const out: { date: string; reps: number[]; topKg: number }[] = []
+  for (const l of logs) {
+    const e = l.exercises.find((e) => e.name === name)
+    if (!e) continue
+    const done = e.sets.filter((s) => s.done)
+    if (done.length === 0) continue
+    out.push({
+      date: l.date,
+      reps: done.map((s) => s.reps),
+      topKg: Math.max(...done.map((s) => s.weightKg)),
+    })
+    if (out.length === n) break
+  }
+  return out
+}
 
 export default function SessionPage() {
   const { state, dispatch } = useStore()
   const navigate = useNavigate()
   const [timer, setTimer] = useState<RestTimer | null>(null)
+  const [openInfo, setOpenInfo] = useState<number | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [confirmFinish, setConfirmFinish] = useState(false)
   const [celebration, setCelebration] = useState<{ workoutName: string; prs: PR[] } | null>(null)
@@ -107,17 +126,27 @@ export default function SessionPage() {
             className={`animate-rise border bg-surface ${allDone ? "border-volt-dim/50" : "border-line"}`}
             style={{ animationDelay: `${exIdx * 50}ms` }}
           >
-            <header className="flex items-baseline justify-between border-b border-line px-4 py-3">
+            <button
+              type="button"
+              className="flex w-full items-baseline justify-between border-b border-line px-4 py-3 text-left"
+              onClick={() => setOpenInfo(openInfo === exIdx ? null : exIdx)}
+            >
               <div>
                 <h2 className={`font-display text-lg ${allDone ? "text-volt" : ""}`}>
                   {exercise.name}
                 </h2>
                 {exercise.notes && <p className="text-xs text-dim">{exercise.notes}</p>}
               </div>
-              <span className="font-mono text-xs font-bold tabular text-dim">
+              <span className="flex items-center gap-1.5 font-mono text-xs font-bold tabular text-dim">
                 {exercise.targetSets}×{exercise.targetReps}
+                <ChevronDown
+                  className={`h-3.5 w-3.5 text-faint transition-transform ${
+                    openInfo === exIdx ? "rotate-180" : ""
+                  }`}
+                />
               </span>
-            </header>
+            </button>
+            {openInfo === exIdx && <ExerciseInfo exercise={exercise} logs={state.logs} />}
             <div className="divide-y divide-line/60">
               {exercise.sets.map((set, setIdx) => (
                 <div key={setIdx} className="flex items-center gap-1.5 px-2.5 py-2">
@@ -244,6 +273,40 @@ export default function SessionPage() {
         onConfirm={finish}
         onClose={() => setConfirmFinish(false)}
       />
+    </div>
+  )
+}
+
+/** Last sessions for this exercise plus the barbell plate math for the working weight. */
+function ExerciseInfo({ exercise, logs }: { exercise: ExerciseLog; logs: WorkoutLog[] }) {
+  const history = recentHistory(logs, exercise.name)
+  const workingSet = exercise.sets.find((s) => !s.done) ?? exercise.sets[exercise.sets.length - 1]
+  const plates = workingSet && workingSet.weightKg > 0 ? platesPerSide(workingSet.weightKg) : null
+
+  return (
+    <div className="space-y-2 border-b border-line bg-raised/40 px-4 py-3">
+      {history.length === 0 ? (
+        <p className="text-xs text-dim">First time — no history for this exercise yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {history.map((h) => (
+            <li key={h.date} className="flex items-center justify-between text-xs">
+              <span className="text-dim">{fmtDate(h.date)}</span>
+              <span className="font-mono font-bold tabular text-dim">
+                {h.reps.join("/")} <span className="text-ink">@ {fmtKg(h.topKg)}kg</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {plates !== null && (
+        <p className="font-mono text-[11px] font-bold text-faint">
+          {BAR_KG}kg bar{" "}
+          <span className="text-volt-dim">
+            {plates.length > 0 ? `+ ${plates.map(fmtKg).join(" + ")} per side` : "· empty bar"}
+          </span>
+        </p>
+      )}
     </div>
   )
 }

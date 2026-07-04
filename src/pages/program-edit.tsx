@@ -241,8 +241,12 @@ export default function ProgramEditPage() {
             >
               <span className="font-display text-lg">{workout.name}</span>
               <span className="flex items-center gap-2 text-xs text-faint">
-                {workout.exercises.length} exercises
-                {workout.cardio && <Footprints className="h-3.5 w-3.5 text-volt-dim" />}
+                {workout.kind === "class"
+                  ? `class · ${workout.classMinutes ?? 60} min`
+                  : `${workout.exercises.length} exercises`}
+                {workout.cardio && workout.kind !== "class" && (
+                  <Footprints className="h-3.5 w-3.5 text-volt-dim" />
+                )}
                 <ChevronDown
                   className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
                 />
@@ -255,6 +259,55 @@ export default function ProgramEditPage() {
                   value={workout.name}
                   onChange={(e) => patchWorkout(workout.id, { name: e.target.value })}
                 />
+
+                {/* gym session with sets, or an external class (BJJ, pilates…) */}
+                <div className="flex gap-2">
+                  {(["lift", "class"] as const).map((kind) => (
+                    <button
+                      key={kind}
+                      type="button"
+                      className={`h-10 flex-1 border text-xs font-bold uppercase tracking-wide ${
+                        (workout.kind ?? "lift") === kind
+                          ? "border-volt bg-volt text-carbon"
+                          : "border-line text-dim active:bg-raised"
+                      }`}
+                      onClick={() => patchWorkout(workout.id, { kind })}
+                    >
+                      {kind === "lift" ? "Gym workout" : "Class"}
+                    </button>
+                  ))}
+                </div>
+
+                {workout.kind === "class" ? (
+                  <>
+                    <label className="block">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+                        Duration
+                      </span>
+                      <div className="mt-1 max-w-40">
+                        <Stepper
+                          value={workout.classMinutes ?? 60}
+                          step={15}
+                          min={15}
+                          suffix="min"
+                          onChange={(classMinutes) => patchWorkout(workout.id, { classMinutes })}
+                        />
+                      </div>
+                    </label>
+                    <p className="text-xs text-dim">
+                      Classes are logged with one tap on Today — no sets, no session. They count
+                      toward your week like any workout.
+                    </p>
+                    <button
+                      type="button"
+                      className="flex h-11 w-full items-center justify-center gap-1.5 border border-line text-sm font-semibold text-danger active:bg-raised"
+                      onClick={() => removeWorkout(workout.id)}
+                    >
+                      <Trash2 className="h-4 w-4" /> Delete workout
+                    </button>
+                  </>
+                ) : (
+                  <>
                 {workout.exercises.map((e) => (
                   <ExerciseEditor
                     key={e.id}
@@ -286,6 +339,8 @@ export default function ProgramEditPage() {
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
+                  </>
+                )}
               </div>
             )}
           </div>

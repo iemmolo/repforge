@@ -17,6 +17,10 @@ type Action =
   | { type: "toggleFavorite"; programId: string }
   | { type: "dismissSuggestions"; keys: string[] }
   | { type: "logCardio"; cardioType: CardioType; minutes: number; distanceKm?: number }
+  | { type: "logClass"; programId: string; programName: string; workoutId: string; workoutName: string; minutes: number }
+  | { type: "completeOnboarding" }
+  | { type: "markExported" }
+  | { type: "snoozeBackupNudge"; untilISO: string }
   | { type: "restoreProgram"; programId: string }
   | { type: "deleteLog"; logId: string }
   | { type: "importState"; state: AppState }
@@ -110,6 +114,29 @@ function reducer(state: AppState, action: Action): AppState {
       }
       return { ...state, logs: [log, ...state.logs] }
     }
+    case "logClass": {
+      // classes are logged in one tap — no session, no sets
+      const now = new Date()
+      const log: WorkoutLog = {
+        id: uid(),
+        programId: action.programId,
+        programName: action.programName,
+        workoutId: action.workoutId,
+        workoutName: action.workoutName,
+        date: todayISO(),
+        startedAt: now.toISOString(),
+        completedAt: now.toISOString(),
+        exercises: [],
+        classMinutes: action.minutes,
+      }
+      return { ...state, logs: [log, ...state.logs] }
+    }
+    case "completeOnboarding":
+      return { ...state, onboarded: true }
+    case "markExported":
+      return { ...state, lastExportAt: new Date().toISOString() }
+    case "snoozeBackupNudge":
+      return { ...state, backupSnoozedUntil: action.untilISO }
     case "restoreProgram": {
       const preset = PRESET_PROGRAMS.find((p) => p.id === action.programId)
       if (!preset) return state
@@ -123,7 +150,8 @@ function reducer(state: AppState, action: Action): AppState {
     case "deleteLog":
       return { ...state, logs: state.logs.filter((l) => l.id !== action.logId) }
     case "importState":
-      return action.state
+      // old backups predate the onboarding flag; their owners are onboarded
+      return { ...action.state, onboarded: action.state.onboarded ?? true }
     case "loadPresets": {
       // add any preset program not already present; never overwrite edits
       const missing = PRESET_PROGRAMS.filter(
@@ -142,7 +170,9 @@ function loadState(): AppState {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as AppState
-      if (parsed.version === 1 && Array.isArray(parsed.programs)) return parsed
+      // states saved before onboarding existed belong to established users
+      if (parsed.version === 1 && Array.isArray(parsed.programs))
+        return { ...parsed, onboarded: parsed.onboarded ?? true }
     }
   } catch {
     // corrupted storage falls through to seed

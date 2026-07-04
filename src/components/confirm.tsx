@@ -3,11 +3,13 @@ interface ConfirmProps {
   title: string
   body: string
   confirmLabel?: string
+  /** "danger" (default) for destructive actions, "accent" for positive ones */
+  tone?: "danger" | "accent"
   onConfirm: () => void
   onClose: () => void
 }
 
-export function Confirm({ open, title, body, confirmLabel = "Confirm", onConfirm, onClose }: ConfirmProps) {
+export function Confirm({ open, title, body, confirmLabel = "Confirm", tone = "danger", onConfirm, onClose }: ConfirmProps) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-carbon/80 backdrop-blur-sm" onClick={onClose}>
@@ -28,7 +30,9 @@ export function Confirm({ open, title, body, confirmLabel = "Confirm", onConfirm
           </button>
           <button
             type="button"
-            className="h-12 flex-1 rounded-lg bg-danger font-semibold uppercase tracking-wide text-carbon active:opacity-80"
+            className={`h-12 flex-1 rounded-lg font-semibold uppercase tracking-wide text-carbon active:opacity-80 ${
+              tone === "accent" ? "bg-volt" : "bg-danger"
+            }`}
             onClick={() => {
               onConfirm()
               onClose()

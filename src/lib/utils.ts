@@ -1,4 +1,4 @@
-import type { DayOfWeek, ExerciseLog, WorkoutLog } from "@/types"
+import type { AppState, DayOfWeek, ExerciseLog, WorkoutLog } from "@/types"
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -86,4 +86,34 @@ export const CATEGORY_LABELS: Record<string, string> = {
 export function logsThisWeek(logs: WorkoutLog[]): WorkoutLog[] {
   const start = weekStartISO()
   return logs.filter((l) => l.date >= start)
+}
+
+export const BAR_KG = 20
+const PLATES_KG = [25, 20, 15, 10, 5, 2.5, 1.25, 0.5]
+
+/**
+ * Plates per side for a barbell load. null = below bar weight or not
+ * loadable with standard plates.
+ */
+export function platesPerSide(totalKg: number, barKg = BAR_KG): number[] | null {
+  if (totalKg < barKg) return null
+  let remaining = (totalKg - barKg) / 2
+  const plates: number[] = []
+  for (const p of PLATES_KG) {
+    while (remaining >= p - 1e-9) {
+      plates.push(p)
+      remaining -= p
+    }
+  }
+  return remaining > 1e-9 ? null : plates
+}
+
+export function downloadBackup(state: AppState) {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = `repforge-backup-${todayISO()}.json`
+  a.click()
+  URL.revokeObjectURL(url)
 }

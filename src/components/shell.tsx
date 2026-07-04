@@ -1,5 +1,8 @@
+import { useState } from "react"
 import { NavLink, Outlet, useLocation } from "react-router-dom"
-import { Flame, History, TrendingUp, Layers } from "lucide-react"
+import { Flame, HelpCircle, History, TrendingUp, Layers } from "lucide-react"
+import { useStore } from "@/lib/store"
+import { HelpSheet, Onboarding } from "@/components/intro"
 
 const tabs = [
   { to: "/", label: "Today", icon: Flame },
@@ -10,7 +13,11 @@ const tabs = [
 
 export function Shell() {
   const location = useLocation()
+  const { state } = useStore()
+  const [helpOpen, setHelpOpen] = useState(false)
   const inSession = location.pathname === "/session"
+
+  if (!state.onboarded) return <Onboarding />
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
@@ -18,7 +25,17 @@ export function Shell() {
         <span className="font-display text-2xl leading-none">
           REP<span className="text-volt">FORGE</span>
         </span>
-        <span className="h-2 w-16 hazard opacity-70" />
+        <span className="flex items-center gap-3">
+          <span className="h-2 w-16 hazard opacity-70" />
+          <button
+            type="button"
+            className="-m-2 p-2 text-dim active:text-ink"
+            onClick={() => setHelpOpen(true)}
+            aria-label="how Repforge works"
+          >
+            <HelpCircle className="h-5 w-5" />
+          </button>
+        </span>
       </header>
 
       <main className="flex-1 px-4 pb-32">
@@ -45,6 +62,8 @@ export function Shell() {
           </div>
         </nav>
       )}
+
+      <HelpSheet open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }

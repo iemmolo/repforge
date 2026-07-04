@@ -33,6 +33,9 @@ export interface CardioResult extends CardioTarget {
 export interface Workout {
   id: string
   name: string
+  /** "class" = external session (BJJ, pilates…): name + duration, logged with one tap */
+  kind?: "lift" | "class"
+  classMinutes?: number
   exercises: Exercise[]
   cardio?: CardioTarget
 }
@@ -81,6 +84,8 @@ export interface Session {
   startedAt: string // ISO datetime
   exercises: ExerciseLog[]
   cardio?: CardioResult
+  /** set only on class logs (workout kind "class" or quick-logged classes) */
+  classMinutes?: number
 }
 
 export interface WorkoutLog extends Session {
@@ -96,4 +101,8 @@ export interface AppState {
   session: Session | null
   /** signatures of progression suggestions the user has dismissed */
   dismissedSuggestions?: string[]
+  /** false only on fresh installs until the intro is completed; legacy states count as onboarded */
+  onboarded?: boolean
+  lastExportAt?: string // ISO datetime of the last backup export
+  backupSnoozedUntil?: string // YYYY-MM-DD; hide the backup nudge until then
 }

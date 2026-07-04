@@ -43,9 +43,11 @@ export default function HistoryPage() {
               </div>
               <div className="flex items-center gap-3">
                 <span
-                  className={`font-mono text-sm font-bold tabular ${pct === 100 ? "text-volt" : "text-dim"}`}
+                  className={`font-mono text-sm font-bold tabular ${
+                    log.classMinutes != null || pct === 100 ? "text-volt" : "text-dim"
+                  }`}
                 >
-                  {pct}%
+                  {log.classMinutes != null ? `${log.classMinutes}min` : `${pct}%`}
                 </span>
                 <ChevronDown
                   className={`h-4 w-4 text-faint transition-transform ${open ? "rotate-180" : ""}`}
@@ -55,6 +57,14 @@ export default function HistoryPage() {
             {open && (
               <div className="border-t border-line px-4 py-3">
                 <ul className="space-y-1.5">
+                  {log.classMinutes != null && (
+                    <li className="flex justify-between text-sm">
+                      <span>Class</span>
+                      <span className="font-mono text-xs font-bold tabular text-dim">
+                        {log.classMinutes}min
+                      </span>
+                    </li>
+                  )}
                   {log.exercises.map((e) => {
                     const doneSets = e.sets.filter((s) => s.done)
                     const top = doneSets.reduce((m, s) => Math.max(m, s.weightKg), 0)
