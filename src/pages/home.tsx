@@ -312,7 +312,7 @@ function ClassCard({
       </p>
       <p className="font-display mt-1 text-3xl">{workout.name}</p>
       <div className="mt-3 flex items-center gap-2">
-        <Stepper className="w-32 shrink-0" value={minutes} step={15} min={15} suffix="min" onChange={setMinutes} />
+        <Stepper className="w-32 shrink-0 text-ink" value={minutes} step={15} min={15} suffix="min" onChange={setMinutes} />
         <button
           type="button"
           className="flex h-11 flex-1 items-center justify-center gap-1.5 bg-carbon font-display text-base text-volt active:opacity-80"
