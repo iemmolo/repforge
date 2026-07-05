@@ -11,11 +11,14 @@ export interface Exercise {
   id: string
   name: string
   sets: number
+  /** in "time" mode this is the target hold in seconds; otherwise target reps */
   targetReps: number
   weightKg: number
   incrementKg: number
   restSeconds: number
   notes?: string
+  /** "time" = held for duration (planks, hollow holds); default "reps" */
+  mode?: "reps" | "time"
 }
 
 export type CardioType = "walk" | "run"
@@ -72,6 +75,8 @@ export interface ExerciseLog {
   targetReps: number
   restSeconds: number
   notes?: string
+  /** "time" = each set's `reps` value is seconds held; default "reps" */
+  mode?: "reps" | "time"
   sets: SetLog[]
 }
 

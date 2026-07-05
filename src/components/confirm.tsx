@@ -3,13 +3,14 @@ interface ConfirmProps {
   title: string
   body: string
   confirmLabel?: string
+  cancelLabel?: string
   /** "danger" (default) for destructive actions, "accent" for positive ones */
   tone?: "danger" | "accent"
   onConfirm: () => void
   onClose: () => void
 }
 
-export function Confirm({ open, title, body, confirmLabel = "Confirm", tone = "danger", onConfirm, onClose }: ConfirmProps) {
+export function Confirm({ open, title, body, confirmLabel = "Confirm", cancelLabel = "Cancel", tone = "danger", onConfirm, onClose }: ConfirmProps) {
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-carbon/80 backdrop-blur-sm" onClick={onClose}>
@@ -26,7 +27,7 @@ export function Confirm({ open, title, body, confirmLabel = "Confirm", tone = "d
             className="h-12 flex-1 rounded-lg border border-line font-semibold uppercase tracking-wide text-dim active:bg-raised"
             onClick={onClose}
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"

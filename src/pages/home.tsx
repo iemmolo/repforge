@@ -44,6 +44,9 @@ export default function HomePage() {
     ? nextCycleWorkout(program, state.logs)
     : program.workouts.find((w) => w.id === program.schedule[today])
   const others = program.workouts.filter((w) => w.id !== scheduled?.id)
+  const scheduledDoneToday =
+    scheduled != null &&
+    state.logs.some((l) => l.date === todayISO() && l.workoutId === scheduled.id)
 
   const suggestions = useMemo(() => {
     const dismissed = new Set(state.dismissedSuggestions ?? [])
@@ -194,6 +197,20 @@ export default function HomePage() {
           doneToday={state.logs.some((l) => l.date === todayISO() && l.workoutId === scheduled.id)}
           onDone={(minutes) => logClass(scheduled, minutes)}
         />
+      ) : scheduled && scheduledDoneToday ? (
+        <div className="animate-rise stagger-2 border-2 border-volt-dim/60 bg-surface p-5">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-volt">
+            <Check className="h-3.5 w-3.5" strokeWidth={3} /> Done today
+          </p>
+          <p className="font-display mt-1 text-3xl text-dim">{scheduled.name}</p>
+          <button
+            type="button"
+            className="mt-2 flex items-center gap-1 text-sm font-semibold text-dim active:text-ink"
+            onClick={() => start(scheduled)}
+          >
+            Train it again <Play className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ) : scheduled ? (
         <button
           type="button"

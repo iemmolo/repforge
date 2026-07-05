@@ -469,6 +469,7 @@ function ExerciseEditor({
   onChange: (patch: Partial<Exercise>) => void
   onRemove: () => void
 }) {
+  const timed = exercise.mode === "time"
   return (
     <div className="border border-line/70 bg-raised/50 p-3">
       <div className="flex items-center gap-2">
@@ -486,34 +487,55 @@ function ExerciseEditor({
           <Trash2 className="h-4 w-4" />
         </button>
       </div>
+      <div className="mt-2 flex gap-2">
+        {(["reps", "time"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            className={`h-9 flex-1 border text-[11px] font-bold uppercase tracking-wide ${
+              (exercise.mode ?? "reps") === m
+                ? "border-volt bg-volt text-carbon"
+                : "border-line text-dim active:bg-raised"
+            }`}
+            onClick={() => onChange({ mode: m === "reps" ? undefined : "time" })}
+          >
+            {m === "reps" ? "Reps & weight" : "Timed hold"}
+          </button>
+        ))}
+      </div>
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-2">
         <Field label="Sets">
           <Stepper value={exercise.sets} step={1} min={1} onChange={(sets) => onChange({ sets })} />
         </Field>
-        <Field label="Reps">
+        <Field label={timed ? "Seconds" : "Reps"}>
           <Stepper
             value={exercise.targetReps}
-            step={1}
+            step={timed ? 5 : 1}
             min={1}
+            suffix={timed ? "s" : undefined}
             onChange={(targetReps) => onChange({ targetReps })}
           />
         </Field>
-        <Field label="Weight">
-          <Stepper
-            value={exercise.weightKg}
-            step={2.5}
-            suffix="kg"
-            onChange={(weightKg) => onChange({ weightKg })}
-          />
-        </Field>
-        <Field label="Increment">
-          <Stepper
-            value={exercise.incrementKg}
-            step={0.5}
-            suffix="kg"
-            onChange={(incrementKg) => onChange({ incrementKg })}
-          />
-        </Field>
+        {!timed && (
+          <>
+            <Field label="Weight">
+              <Stepper
+                value={exercise.weightKg}
+                step={2.5}
+                suffix="kg"
+                onChange={(weightKg) => onChange({ weightKg })}
+              />
+            </Field>
+            <Field label="Increment">
+              <Stepper
+                value={exercise.incrementKg}
+                step={0.5}
+                suffix="kg"
+                onChange={(incrementKg) => onChange({ incrementKg })}
+              />
+            </Field>
+          </>
+        )}
         <Field label="Rest">
           <Stepper
             value={exercise.restSeconds}

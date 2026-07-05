@@ -13,6 +13,11 @@ function ex(
   return { id, name, sets, targetReps, weightKg, incrementKg, restSeconds, notes }
 }
 
+/** A timed hold (plank, hollow hold): targetReps is seconds, no load. */
+function hold(name: string, sets: number, seconds: number, restSeconds: number, notes?: string): Exercise {
+  return { ...ex(name, sets, seconds, 0, 0, restSeconds, notes), mode: "time" }
+}
+
 // ————————————————————————————————— Strength
 
 const foundationStrength: Program = {
@@ -34,7 +39,7 @@ const foundationStrength: Program = {
         ex("Bench Press", 4, 8, 50, 2.5, 150),
         ex("Cable Row", 3, 10, 40, 2.5, 120),
         ex("Lateral Raise", 3, 15, 5, 1, 60),
-        ex("Plank", 3, 45, 0, 0, 60, "Reps = seconds held"),
+        hold("Plank", 3, 45, 60),
       ],
     },
     {
@@ -194,7 +199,7 @@ const volumeBlock: Program = {
         ex("Bulgarian Split Squat", 3, 10, 8, 1, 90, "Per dumbbell, per leg"),
         ex("Calf Raise", 4, 15, 40, 5, 60),
         ex("Cable Crunch", 3, 15, 25, 2.5, 60),
-        ex("Plank", 3, 45, 0, 0, 60, "Reps = seconds held"),
+        hold("Plank", 3, 45, 60),
       ],
     },
   ],
@@ -480,7 +485,7 @@ const bodyweightBasics: Program = {
         ex("Inverted Row", 3, 8, 0, 0, 120, "Feet further forward = harder"),
         ex("Dip", 3, 8, 0, 0, 120),
         ex("Split Squat", 3, 8, 0, 0, 90, "Per leg. Too easy? Rear-foot elevated"),
-        ex("Plank", 3, 45, 0, 0, 60, "Reps = seconds held"),
+        hold("Plank", 3, 45, 60),
       ],
     },
   ],
@@ -507,7 +512,7 @@ const deloadWeek: Program = {
         ex("Machine Chest Press", 2, 12, 25, 0, 90),
         ex("Cable Row", 2, 12, 25, 0, 90),
         ex("Band External Rotation", 3, 15, 0, 0, 45),
-        ex("Plank", 2, 30, 0, 0, 60, "Reps = seconds held"),
+        hold("Plank", 2, 30, 60),
       ],
       cardio: { type: "walk", minutes: 20 },
     },
