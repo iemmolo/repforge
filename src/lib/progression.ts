@@ -12,14 +12,26 @@ export interface Suggestion {
 /** consecutive missed sessions at the current weight before a deload is suggested */
 const DELOAD_AFTER_MISSES = 3
 
+/**
+ * At/below this target-rep count a lift is treated as linear strength work
+ * (5×5, GZCLP T1, heavy singles) — it's meant to climb every clean session.
+ * Above it, the lift is rep-range/accessory work, where a bump after a single
+ * good session is just noise, so we wait for two clean sessions in a row.
+ */
+const LINEAR_REP_CEILING = 5
+const CLEAN_SESSIONS_LINEAR = 1
+const CLEAN_SESSIONS_REP_RANGE = 2
+
 /** Stable identity for a suggestion — changes when the weights involved change. */
 export function suggestionKey(programId: string, s: Suggestion): string {
   return `${programId}:${s.workoutId}:${s.exerciseId}:${s.suggestedKg}`
 }
 
 /**
- * "up": in the most recent completed log, every set was done at (or above)
- * the current target weight for at least the target reps.
+ * "up": the last clean session(s) hit every set at (or above) the current
+ * target weight for at least the target reps. Low-rep strength lifts fire
+ * after one such session; higher-rep work waits for two in a row so
+ * accessories don't nag a bump every single time you meet the number.
  * "deload": the last DELOAD_AFTER_MISSES logs that attempted the current
  * target weight all missed it — suggest ~90%, rounded to the increment.
  */
@@ -51,7 +63,11 @@ export function suggestionsForProgram(program: Program, logs: WorkoutLog[]): Sug
       })
       if (attempts.length === 0) continue
 
-      if (hitTarget(attempts[0])) {
+      const needed =
+        exercise.targetReps <= LINEAR_REP_CEILING
+          ? CLEAN_SESSIONS_LINEAR
+          : CLEAN_SESSIONS_REP_RANGE
+      if (attempts.length >= needed && attempts.slice(0, needed).every(hitTarget)) {
         result.push({
           kind: "up",
           workoutId: workout.id,
