@@ -1,4 +1,4 @@
-import type { AppState, DayOfWeek, ExerciseLog, WorkoutLog } from "@/types"
+import type { AppState, DayOfWeek, Exercise, ExerciseLog, WorkoutLog } from "@/types"
 
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10)
@@ -42,6 +42,33 @@ export function weekStartISO(date = new Date()): string {
 
 export function fmtKg(kg: number): string {
   return kg % 1 === 0 ? String(kg) : kg.toFixed(1)
+}
+
+/** Planned weight for set `i`: the saved per-set shape, else the flat weight. */
+export function plannedSetWeight(exercise: Exercise, i: number): number {
+  return exercise.setWeightsKg?.[i] ?? exercise.weightKg
+}
+
+/** The full planned weight column for an exercise, one entry per set. */
+export function plannedWeights(exercise: Exercise): number[] {
+  return Array.from({ length: exercise.sets }, (_, i) => plannedSetWeight(exercise, i))
+}
+
+/**
+ * Normalise a weight column into what the template should store: a flat
+ * `weightKg` when every set matches, plus the per-set array only when they
+ * differ. `weightKg` is always the heaviest entry so progression keeps
+ * reading a single meaningful working weight.
+ */
+export function weightPatch(weights: number[]): { weightKg: number; setWeightsKg?: number[] } {
+  const top = weights.length > 0 ? Math.max(...weights) : 0
+  const flat = weights.every((w) => w === top)
+  return { weightKg: top, setWeightsKg: flat ? undefined : [...weights] }
+}
+
+/** Compare two weight columns — used to decide whether there's anything to save. */
+export function sameWeights(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((w, i) => w === b[i])
 }
 
 export function fmtClock(totalSeconds: number): string {

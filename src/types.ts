@@ -13,7 +13,14 @@ export interface Exercise {
   sets: number
   /** in "time" mode this is the target hold in seconds; otherwise target reps */
   targetReps: number
+  /** the working weight — the top set. Progression suggestions read this. */
   weightKg: number
+  /**
+   * Per-set weights, saved from a session whose sets weren't all equal
+   * (a ramp or a back-off set). Absent means every set uses `weightKg`,
+   * which stays in sync as the heaviest entry here.
+   */
+  setWeightsKg?: number[]
   incrementKg: number
   restSeconds: number
   notes?: string

@@ -6,7 +6,7 @@ import { PRESET_PROGRAMS } from "@/lib/seed"
 import { Stepper } from "@/components/stepper"
 import { Picker } from "@/components/picker"
 import { Confirm } from "@/components/confirm"
-import { CARDIO_LABELS, DAY_LABELS, WEEK_DAYS, uid } from "@/lib/utils"
+import { CARDIO_LABELS, DAY_LABELS, WEEK_DAYS, fmtKg, plannedWeights, uid } from "@/lib/utils"
 import type { CardioType, Exercise, Program, Workout } from "@/types"
 
 export default function ProgramEditPage() {
@@ -523,7 +523,9 @@ function ExerciseEditor({
                 value={exercise.weightKg}
                 step={2.5}
                 suffix="kg"
-                onChange={(weightKg) => onChange({ weightKg })}
+                // setting a weight here means "same across every set",
+                // so it drops any per-set ramp saved from a session
+                onChange={(weightKg) => onChange({ weightKg, setWeightsKg: undefined })}
               />
             </Field>
             <Field label="Increment">
@@ -545,6 +547,15 @@ function ExerciseEditor({
           />
         </Field>
       </div>
+      {!timed && exercise.setWeightsKg && (
+        <p className="mt-2 font-mono text-[11px] font-bold text-faint">
+          Per set{" "}
+          <span className="text-volt-dim">
+            {plannedWeights(exercise).map(fmtKg).join(" / ")}kg
+          </span>{" "}
+          — tap Weight to flatten
+        </p>
+      )}
       <input
         className="mt-2 h-10 w-full border border-line bg-raised px-3 text-xs outline-none placeholder:text-faint focus:border-volt"
         value={exercise.notes ?? ""}

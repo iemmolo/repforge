@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useReducer, type ReactNode } from "react"
 import type { AppState, CardioType, Program, Session, Workout, WorkoutLog } from "@/types"
 import { PRESET_PROGRAMS, seedState } from "@/lib/seed"
-import { completionPercent, todayISO, uid } from "@/lib/utils"
+import { completionPercent, plannedSetWeight, todayISO, uid } from "@/lib/utils"
 
 const STORAGE_KEY = "repforge:v1"
 
@@ -56,7 +56,12 @@ function reducer(state: AppState, action: Action): AppState {
               const hit = action.weights.find(
                 (s) => s.workoutId === w.id && s.exerciseId === e.id,
               )
-              return hit ? { ...e, weightKg: hit.kg } : e
+              if (!hit) return e
+              // a saved ramp keeps its shape — shift every set by the same
+              // delta so a bump/deload moves the whole column, not just the top
+              const delta = hit.kg - e.weightKg
+              const setWeightsKg = e.setWeightsKg?.map((w) => Math.max(0, w + delta))
+              return { ...e, weightKg: hit.kg, setWeightsKg }
             }),
           })),
         }
@@ -227,10 +232,10 @@ export function buildSession(program: Program, workout: Workout): Session {
       restSeconds: e.restSeconds,
       notes: e.notes,
       mode: e.mode,
-      sets: Array.from({ length: e.sets }, () => ({
+      sets: Array.from({ length: e.sets }, (_, i) => ({
         done: false,
         reps: e.targetReps,
-        weightKg: e.weightKg,
+        weightKg: plannedSetWeight(e, i),
       })),
     })),
     cardio: workout.cardio ? { ...workout.cardio, done: false } : undefined,

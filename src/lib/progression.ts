@@ -1,3 +1,4 @@
+import { plannedSetWeight } from "@/lib/utils"
 import type { Program, WorkoutLog } from "@/types"
 
 export interface Suggestion {
@@ -45,10 +46,15 @@ export function suggestionsForProgram(program: Program, logs: WorkoutLog[]): Sug
     for (const exercise of workout.exercises) {
       if (exercise.incrementKg <= 0) continue
 
+      // each set is judged against its own planned weight, so a saved ramp
+      // (10/12.5/12.5) still counts as clean instead of failing on set 1
       const hitTarget = (l: WorkoutLog) =>
         l.exercises
           .find((e) => e.exerciseId === exercise.id)!
-          .sets.every((s) => s.done && s.reps >= exercise.targetReps && s.weightKg >= exercise.weightKg)
+          .sets.every(
+            (s, i) =>
+              s.done && s.reps >= exercise.targetReps && s.weightKg >= plannedSetWeight(exercise, i),
+          )
 
       // logs that attempted this exercise at the current target weight —
       // sets prefill at the target, so pre-increase logs drop out here

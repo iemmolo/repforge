@@ -1,31 +1,69 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Check, CheckCircle2, ChevronDown, Footprints, Pencil, Play, Plus, Square, X } from "lucide-react"
+import {
+  ArrowDownToLine,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  CornerDownLeft,
+  Footprints,
+  Pencil,
+  Play,
+  Plus,
+  Square,
+  X,
+} from "lucide-react"
 import { useStore } from "@/lib/store"
 import { Stepper } from "@/components/stepper"
 import { Confirm } from "@/components/confirm"
 import { Celebration } from "@/components/celebration"
 import { RestTimerBar, type RestTimer } from "@/components/rest-timer"
+import { primeAudio } from "@/lib/audio"
 import { detectPRs, type PR } from "@/lib/gamify"
-import { BAR_KG, CARDIO_LABELS, completionPercent, fmtClock, fmtDate, fmtKg, platesPerSide, uid } from "@/lib/utils"
+import {
+  BAR_KG,
+  CARDIO_LABELS,
+  completionPercent,
+  fmtClock,
+  fmtDate,
+  fmtKg,
+  plannedWeights,
+  platesPerSide,
+  sameWeights,
+  uid,
+  weightPatch,
+} from "@/lib/utils"
 import type { Exercise, ExerciseLog, Program, Session, WorkoutLog } from "@/types"
 
-/** Last n outings for this exercise (matched by name, newest first). */
-function recentHistory(logs: WorkoutLog[], name: string, n = 3) {
-  const out: { date: string; reps: number[]; topKg: number }[] = []
+/**
+ * Last n outings for this exercise, newest first. Matched by id first so a
+ * rename doesn't lose the trail, falling back to the name for older logs.
+ */
+function recentHistory(logs: WorkoutLog[], exercise: ExerciseLog, n = 3) {
+  const out: { date: string; reps: number[]; weights: number[]; topKg: number }[] = []
   for (const l of logs) {
-    const e = l.exercises.find((e) => e.name === name)
+    const e =
+      l.exercises.find((e) => e.exerciseId === exercise.exerciseId) ??
+      l.exercises.find((e) => e.name === exercise.name)
     if (!e) continue
     const done = e.sets.filter((s) => s.done)
     if (done.length === 0) continue
     out.push({
       date: l.date,
       reps: done.map((s) => s.reps),
+      weights: done.map((s) => s.weightKg),
       topKg: Math.max(...done.map((s) => s.weightKg)),
     })
     if (out.length === n) break
   }
   return out
+}
+
+/** "12.5" when every set matches, "10/12.5/12.5" when it's a ramp. */
+function fmtWeights(weights: number[]): string {
+  return weights.every((w) => w === weights[0])
+    ? fmtKg(weights[0] ?? 0)
+    : weights.map(fmtKg).join("/")
 }
 
 /** A hold in progress: which set is being timed and when it started. */
@@ -50,6 +88,9 @@ export default function SessionPage() {
   const [hold, setHold] = useState<Hold | null>(null)
   const [holdNow, setHoldNow] = useState(0)
   const [addingExercise, setAddingExercise] = useState(false)
+  // exerciseId -> the weight column already written to the program, so the
+  // button can confirm "Saved" instead of silently vanishing
+  const [savedWeights, setSavedWeights] = useState<Record<string, string>>({})
   // one prompt: "you changed this session — keep it in the program too?"
   const [persist, setPersist] = useState<{ body: string; run: () => void } | null>(null)
 
@@ -98,6 +139,9 @@ export default function SessionPage() {
   }
 
   function startRest(label: string, seconds: number) {
+    // always reached from a tap — the only moment iOS will let us wake audio
+    // for the chime that fires from a timer `seconds` from now
+    primeAudio()
     setTimer({ endsAt: Date.now() + seconds * 1000, totalSeconds: seconds, label })
   }
 
@@ -157,6 +201,28 @@ export default function SessionPage() {
     askPersist(`Rename “${from}” to “${name}” in ${program?.name} for next time?`, () =>
       patchTemplate(exercise.exerciseId, { name }),
     )
+  }
+
+  /** Write today's weights straight into the program so next time prefills them. */
+  function saveWeights(exIdx: number) {
+    if (!session) return
+    const exercise = session.exercises[exIdx]
+    const weights = exercise.sets.map((s) => s.weightKg)
+    patchTemplate(exercise.exerciseId, weightPatch(weights))
+    setSavedWeights((m) => ({ ...m, [exercise.exerciseId]: weights.join(",") }))
+  }
+
+  /** Reuse a past session's weights — tapped from a row in the history panel. */
+  function applyWeightsToSets(exIdx: number, weights: number[]) {
+    if (!session) return
+    update({
+      ...session,
+      exercises: session.exercises.map((e, i) =>
+        i !== exIdx
+          ? e
+          : { ...e, sets: e.sets.map((s, j) => ({ ...s, weightKg: weights[j] ?? s.weightKg })) },
+      ),
+    })
   }
 
   function addSet(exIdx: number) {
@@ -258,6 +324,20 @@ export default function SessionPage() {
         const timed = exercise.mode === "time"
         const doneCount = exercise.sets.filter((s) => s.done).length
         const target = timed ? `${exercise.targetReps}s` : exercise.targetReps
+
+        // ——— weight sync: what today uses vs. what the program has stored
+        const template = program?.workouts
+          .find((w) => w.id === session.workoutId)
+          ?.exercises.find((e) => e.id === exercise.exerciseId)
+        const weights = exercise.sets.map((s) => s.weightKg)
+        const savedThis = savedWeights[exercise.exerciseId] === weights.join(",")
+        const weightsDiffer =
+          !timed && template !== undefined && !sameWeights(weights, plannedWeights(template))
+        // offered once the exercise is finished, so she saves a result rather
+        // than a mid-workout guess — and it sits outside the collapse below,
+        // because finishing every set auto-collapses the card
+        const canSave = !timed && allDone && (savedThis || weightsDiffer)
+
         return (
           <section
             key={exercise.exerciseId}
@@ -345,7 +425,13 @@ export default function SessionPage() {
                     className={`h-3 w-3 transition-transform ${openInfo === exIdx ? "rotate-180" : ""}`}
                   />
                 </button>
-                {openInfo === exIdx && <ExerciseInfo exercise={exercise} logs={state.logs} />}
+                {openInfo === exIdx && (
+                  <ExerciseInfo
+                    exercise={exercise}
+                    logs={state.logs}
+                    onApplyWeights={(w) => applyWeightsToSets(exIdx, w)}
+                  />
+                )}
                 <div className="divide-y divide-line/60">
                   {exercise.sets.map((set, setIdx) => {
                     const active = hold?.exIdx === exIdx && hold?.setIdx === setIdx
@@ -431,6 +517,23 @@ export default function SessionPage() {
                 </button>
               </>
             )}
+
+            {canSave &&
+              (savedThis ? (
+                <p className="flex w-full items-center justify-center gap-1.5 border-t border-volt-dim/40 bg-volt/10 py-2.5 text-xs font-bold uppercase tracking-wide text-volt">
+                  <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                  Saved for next time
+                </p>
+              ) : (
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-center gap-1.5 border-t border-volt-dim/40 py-2.5 text-xs font-bold uppercase tracking-wide text-volt active:bg-raised"
+                  onClick={() => saveWeights(exIdx)}
+                >
+                  <ArrowDownToLine className="h-3.5 w-3.5" />
+                  Save {fmtWeights(weights)}kg for next time
+                </button>
+              ))}
           </section>
         )
       })}
@@ -549,35 +652,82 @@ export default function SessionPage() {
   )
 }
 
-/** Last sessions for this exercise plus the barbell plate math for the working weight. */
-function ExerciseInfo({ exercise, logs }: { exercise: ExerciseLog; logs: WorkoutLog[] }) {
-  const history = recentHistory(logs, exercise.name)
+/**
+ * Last sessions for this exercise plus the barbell plate math. Rows whose
+ * weights differ from today's are tappable — she already opens this panel to
+ * read past weights, so reusing them shouldn't cost a second control.
+ */
+function ExerciseInfo({
+  exercise,
+  logs,
+  onApplyWeights,
+}: {
+  exercise: ExerciseLog
+  logs: WorkoutLog[]
+  onApplyWeights: (weights: number[]) => void
+}) {
+  const history = recentHistory(logs, exercise)
   const timed = exercise.mode === "time"
+  const current = exercise.sets.map((s) => s.weightKg)
   const workingSet = exercise.sets.find((s) => !s.done) ?? exercise.sets[exercise.sets.length - 1]
   const plates =
     !timed && workingSet && workingSet.weightKg > 0 ? platesPerSide(workingSet.weightKg) : null
 
+  // that session's column stretched over today's set count
+  const columnFor = (h: (typeof history)[number]) =>
+    exercise.sets.map((_, i) => h.weights[i] ?? h.weights[h.weights.length - 1])
+  const rows = history.map((h) => {
+    const weights = columnFor(h)
+    return { ...h, weights, reusable: !timed && !sameWeights(weights, current) }
+  })
+
   return (
     <div className="space-y-2 border-b border-line bg-raised/40 px-4 py-3">
-      {history.length === 0 ? (
+      {rows.length === 0 ? (
         <p className="text-xs text-dim">First time — no history for this exercise yet.</p>
       ) : (
-        <ul className="space-y-1">
-          {history.map((h) => (
-            <li key={h.date} className="flex items-center justify-between text-xs">
-              <span className="text-dim">{fmtDate(h.date)}</span>
-              <span className="font-mono font-bold tabular text-dim">
-                {timed ? (
-                  <span className="text-ink">{h.reps.join("/")}s held</span>
+        <ul>
+          {rows.map((h) => {
+            const body = (
+              <>
+                <span className="text-dim">{fmtDate(h.date)}</span>
+                <span className="flex items-center gap-1.5 font-mono font-bold tabular text-dim">
+                  {timed ? (
+                    <span className="text-ink">{h.reps.join("/")}s held</span>
+                  ) : (
+                    <>
+                      {h.reps.join("/")} <span className="text-ink">@ {fmtKg(h.topKg)}kg</span>
+                    </>
+                  )}
+                  <CornerDownLeft
+                    className={`h-3 w-3 ${h.reusable ? "text-volt" : "text-transparent"}`}
+                  />
+                </span>
+              </>
+            )
+            return (
+              <li key={h.date}>
+                {h.reusable ? (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between py-1.5 text-left text-xs active:bg-raised"
+                    onClick={() => onApplyWeights(h.weights)}
+                    aria-label={`use ${fmtWeights(h.weights)}kg from ${fmtDate(h.date)}`}
+                  >
+                    {body}
+                  </button>
                 ) : (
-                  <>
-                    {h.reps.join("/")} <span className="text-ink">@ {fmtKg(h.topKg)}kg</span>
-                  </>
+                  <div className="flex items-center justify-between py-1.5 text-xs">{body}</div>
                 )}
-              </span>
-            </li>
-          ))}
+              </li>
+            )
+          })}
         </ul>
+      )}
+      {rows.some((h) => h.reusable) && (
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+          Tap a session to reuse its weights
+        </p>
       )}
       {plates !== null && (
         <p className="font-mono text-[11px] font-bold text-faint">
