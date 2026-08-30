@@ -1,4 +1,6 @@
+import { useEffect } from "react"
 import { createHashRouter, RouterProvider } from "react-router-dom"
+import { primeAudio, resumeAudioIfNeeded } from "@/lib/audio"
 import { StoreProvider } from "@/lib/store"
 import { Shell } from "@/components/shell"
 import HomePage from "@/pages/home"
@@ -23,6 +25,18 @@ const router = createHashRouter([
 ])
 
 export default function App() {
+  useEffect(() => {
+    // belt and braces: the very first tap anywhere wakes audio, so the rest
+    // timer can still chime even if the session started from a restored state
+    window.addEventListener("pointerdown", primeAudio, { once: true })
+    // iOS suspends the context while the app is backgrounded
+    document.addEventListener("visibilitychange", resumeAudioIfNeeded)
+    return () => {
+      window.removeEventListener("pointerdown", primeAudio)
+      document.removeEventListener("visibilitychange", resumeAudioIfNeeded)
+    }
+  }, [])
+
   return (
     <StoreProvider>
       <RouterProvider router={router} />

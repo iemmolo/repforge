@@ -1,30 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import { FastForward, Plus } from "lucide-react"
+import { playChime } from "@/lib/audio"
 import { fmtClock } from "@/lib/utils"
 
 export interface RestTimer {
   endsAt: number // epoch ms
   totalSeconds: number
   label: string
-}
-
-function chime() {
-  try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
-    const ctx = new Ctx()
-    const osc = ctx.createOscillator()
-    const gain = ctx.createGain()
-    osc.type = "square"
-    osc.frequency.value = 880
-    gain.gain.setValueAtTime(0.12, ctx.currentTime)
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.5)
-    osc.connect(gain).connect(ctx.destination)
-    osc.start()
-    osc.stop(ctx.currentTime + 0.5)
-  } catch {
-    // audio unavailable — vibration below still fires
-  }
-  navigator.vibrate?.([180, 80, 180])
 }
 
 interface RestTimerBarProps {
@@ -47,7 +29,7 @@ export function RestTimerBar({ timer, onDismiss, onExtend }: RestTimerBarProps) 
   useEffect(() => {
     if (timer && now >= timer.endsAt && !firedRef.current) {
       firedRef.current = true
-      chime()
+      playChime()
     }
   }, [now, timer])
 
