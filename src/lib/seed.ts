@@ -18,6 +18,11 @@ function hold(name: string, sets: number, seconds: number, restSeconds: number, 
   return { ...ex(name, sets, seconds, 0, 0, restSeconds, notes), mode: "time" }
 }
 
+/** Link exercises into one superset: done in rounds, one set of each then rest. */
+function superset(key: string, exercises: Exercise[]): Exercise[] {
+  return exercises.map((e) => ({ ...e, superset: key }))
+}
+
 // ————————————————————————————————— Strength
 
 const foundationStrength: Program = {
@@ -543,6 +548,54 @@ const deloadWeek: Program = {
   ],
 }
 
+// ————————————————————————————————— Rehab
+
+// A physio-style plan: single-leg lower-body gym work three days a week,
+// a walk and a light dumbbell circuit on the others. Loads are set by
+// your physio, not the progression engine — increments are 0.
+const rehabPlan: Program = {
+  id: "rehab-plan",
+  name: "Rehab Plan",
+  tagline: "Single-leg gym work Mon/Wed/Fri. Walk and a light upper-body circuit Tue/Thu/Sat.",
+  category: "rehab",
+  schedule: {
+    monday: "rh-gym",
+    tuesday: "rh-walk",
+    wednesday: "rh-gym",
+    thursday: "rh-walk",
+    friday: "rh-gym",
+    saturday: "rh-walk",
+  },
+  workouts: [
+    {
+      id: "rh-gym",
+      name: "Gym — Lower Body",
+      exercises: [
+        ex("Runner's Clam", 3, 20, 0, 0, 60, "Per leg"),
+        ex("Single-Leg RDL", 3, 10, 0, 0, 60, "Dumbbell. Per leg"),
+        ex("Decline Step Down", 3, 10, 0, 0, 60, "Only if pain-free. Per leg"),
+        ex("Single-Leg Extension", 3, 10, 0, 0, 60, "Per leg"),
+        ex("Single-Leg Press", 3, 10, 0, 0, 60, "Per leg"),
+        ex("Hamstring Curl", 3, 10, 0, 0, 60),
+        ex("Abductor Machine", 3, 12, 0, 0, 60),
+        ex("Adductor Machine", 3, 12, 0, 0, 60),
+      ],
+    },
+    {
+      id: "rh-walk",
+      name: "Walk & Upper Circuit",
+      exercises: superset("rh-upper", [
+        ex("Around the World", 3, 10, 1.5, 0, 60, "Per dumbbell"),
+        ex("Bicep Curl", 3, 10, 1.5, 0, 60),
+        ex("Lateral Raise", 3, 10, 1.5, 0, 60),
+        ex("Overhead Press", 3, 10, 1.5, 0, 60),
+        ex("Tricep Extension", 3, 10, 1.5, 0, 60),
+      ]),
+      cardio: { type: "walk", minutes: 30 },
+    },
+  ],
+}
+
 export const PRESET_PROGRAMS: Program[] = [
   foundationStrength,
   linear5x5,
@@ -555,6 +608,7 @@ export const PRESET_PROGRAMS: Program[] = [
   simpleAndSinister,
   bodyweightBasics,
   deloadWeek,
+  rehabPlan,
 ]
 
 export const PRESET_BY_ID = new Map(PRESET_PROGRAMS.map((p) => [p.id, p]))

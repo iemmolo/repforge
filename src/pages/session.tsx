@@ -30,6 +30,7 @@ import {
   plannedWeights,
   platesPerSide,
   sameWeights,
+  supersetBlocks,
   uid,
   weightPatch,
 } from "@/lib/utils"
@@ -109,6 +110,7 @@ export default function SessionPage() {
 
   const pct = completionPercent(session.exercises, session.cardio)
   const program = state.programs.find((p) => p.id === session.programId)
+  const blocks = supersetBlocks(session.exercises)
 
   function update(session: Session) {
     dispatch({ type: "updateSession", session })
@@ -136,6 +138,24 @@ export default function SessionPage() {
       // unticking cancels the rest you started for this exercise
       setTimer((t) => (t && t.label === exercise.name ? null : t))
     }
+  }
+
+  /** Superset rounds get one tick: marks that set of every exercise in the group. */
+  function toggleRound(block: number[], round: number) {
+    if (!session) return
+    const done = !block.every((i) => session.exercises[i].sets[round]?.done ?? true)
+    update({
+      ...session,
+      exercises: session.exercises.map((e, i) =>
+        !block.includes(i)
+          ? e
+          : { ...e, sets: e.sets.map((s, j) => (j === round ? { ...s, done } : s)) },
+      ),
+    })
+    const label = `Superset round ${round + 1}`
+    const rest = Math.max(...block.map((i) => session.exercises[i].restSeconds))
+    if (done && rest > 0) startRest(label, rest)
+    else if (!done) setTimer((t) => (t && t.label === label ? null : t))
   }
 
   function startRest(label: string, seconds: number) {
@@ -167,13 +187,18 @@ export default function SessionPage() {
   }
 
   function patchTemplate(exerciseId: string, patch: Partial<Exercise>) {
+    patchTemplates({ [exerciseId]: patch })
+  }
+
+  /** Several exercises in one save — separate saves would each start from the stale program. */
+  function patchTemplates(patches: Record<string, Partial<Exercise>>) {
     if (!program || !session) return
     const next: Program = {
       ...program,
       workouts: program.workouts.map((w) =>
         w.id !== session.workoutId
           ? w
-          : { ...w, exercises: w.exercises.map((e) => (e.id === exerciseId ? { ...e, ...patch } : e)) },
+          : { ...w, exercises: w.exercises.map((e) => (patches[e.id] ? { ...e, ...patches[e.id] } : e)) },
       ),
     }
     dispatch({ type: "saveProgram", program: next })
@@ -242,6 +267,30 @@ export default function SessionPage() {
     )
   }
 
+  /** One more set of every exercise in a superset. */
+  function addRound(block: number[]) {
+    if (!session) return
+    const count = Math.max(...block.map((i) => session.exercises[i].sets.length)) + 1
+    update({
+      ...session,
+      exercises: session.exercises.map((e, i) => {
+        if (!block.includes(i)) return e
+        const last = e.sets[e.sets.length - 1]
+        const fresh = Array.from({ length: count - e.sets.length }, () => ({
+          done: false,
+          reps: last?.reps ?? e.targetReps,
+          weightKg: last?.weightKg ?? 0,
+        }))
+        return { ...e, targetSets: count, sets: [...e.sets, ...fresh] }
+      }),
+    })
+    askPersist(`Make this superset ${count} rounds in ${program?.name} for next time?`, () =>
+      patchTemplates(
+        Object.fromEntries(block.map((i) => [session.exercises[i].exerciseId, { sets: count }])),
+      ),
+    )
+  }
+
   function addExercise(fields: NewExercise) {
     if (!session) return
     const template: Exercise = {
@@ -292,6 +341,126 @@ export default function SessionPage() {
     navigate("/", { replace: true })
   }
 
+  /**
+   * A superset card, laid out round by round: one set of each exercise,
+   * then the rest timer. Rename, history and weight-saving stay on single
+   * exercise cards.
+   */
+  function renderSuperset(block: number[]) {
+    if (!session) return null
+    const members = block.map((i) => session.exercises[i])
+    const key = `superset:${members[0].exerciseId}`
+    const rounds = Math.max(...members.map((e) => e.sets.length))
+    const roundDone = (r: number) => members.every((e) => e.sets[r]?.done ?? true)
+    const allDone = Array.from({ length: rounds }, (_, r) => r).every(roundDone)
+    const roundsDone = Array.from({ length: rounds }, (_, r) => r).filter(roundDone).length
+    const isCollapsed = collapse[key] ?? allDone
+    const toggleCollapse = () => setCollapse((c) => ({ ...c, [key]: !isCollapsed }))
+
+    return (
+      <section
+        key={key}
+        className={`animate-rise border bg-surface ${allDone ? "border-volt-dim/50" : "border-line"}`}
+        style={{ animationDelay: `${block[0] * 50}ms` }}
+      >
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 border-b border-line px-4 py-3 text-left"
+          onClick={toggleCollapse}
+          aria-label={isCollapsed ? "expand superset" : "collapse superset"}
+        >
+          <div className="min-w-0 flex-1">
+            <h2 className={`font-display text-lg ${allDone ? "text-volt" : ""}`}>Superset</h2>
+            <p className="text-xs text-dim">
+              {isCollapsed
+                ? `${roundsDone}/${rounds} rounds done`
+                : members.map((e) => e.name).join(" · ")}
+            </p>
+          </div>
+          <span className="flex shrink-0 items-center gap-1.5 font-mono text-xs font-bold tabular text-dim">
+            {rounds} rounds
+            <ChevronDown
+              className={`h-3.5 w-3.5 text-faint transition-transform ${isCollapsed ? "" : "rotate-180"}`}
+            />
+          </span>
+        </button>
+
+        {!isCollapsed && (
+          <>
+            {Array.from({ length: rounds }, (_, r) => (
+              <div key={r} className="border-b border-line/60">
+                <div className="flex items-center justify-between py-2 pr-2.5 pl-4">
+                  <p
+                    className={`font-mono text-xs font-bold uppercase ${
+                      roundDone(r) ? "text-volt" : "text-faint"
+                    }`}
+                  >
+                    Round {r + 1}
+                  </p>
+                  <button
+                    type="button"
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-colors ${
+                      roundDone(r)
+                        ? "animate-punch bg-volt text-carbon"
+                        : "border border-line text-faint active:bg-raised"
+                    }`}
+                    onClick={() => toggleRound(block, r)}
+                    aria-label={`round ${r + 1} ${roundDone(r) ? "done" : "not done"}`}
+                  >
+                    <Check className="h-5 w-5" strokeWidth={3} />
+                  </button>
+                </div>
+                <div className="divide-y divide-line/60">
+                  {block.map((exIdx) => {
+                    const exercise = session.exercises[exIdx]
+                    const set = exercise.sets[r]
+                    if (!set) return null
+                    const timed = exercise.mode === "time"
+                    return (
+                      <div key={exIdx} className="px-2.5 py-2">
+                        <p className="truncate px-0.5 pb-1 text-xs font-semibold">
+                          {exercise.name}
+                          {r === 0 && exercise.notes && (
+                            <span className="font-normal text-dim"> · {exercise.notes}</span>
+                          )}
+                        </p>
+                        <div className="flex items-center gap-1.5">
+                          <Stepper
+                            className="min-w-0 flex-1"
+                            value={set.reps}
+                            step={timed ? 5 : 1}
+                            suffix={timed ? "s" : undefined}
+                            onChange={(reps) => patchSet(exIdx, r, { reps })}
+                          />
+                          {!timed && (
+                            <Stepper
+                              className="min-w-0 flex-[1.2]"
+                              value={set.weightKg}
+                              step={2.5}
+                              suffix="kg"
+                              onChange={(weightKg) => patchSet(exIdx, r, { weightKg })}
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            <button
+              type="button"
+              className="flex w-full items-center justify-center gap-1 py-2 text-xs font-semibold uppercase tracking-wide text-dim active:bg-raised"
+              onClick={() => addRound(block)}
+            >
+              <Plus className="h-3.5 w-3.5" /> Add round
+            </button>
+          </>
+        )}
+      </section>
+    )
+  }
+
   return (
     <div className="space-y-4 pb-24">
       <div className="flex items-start justify-between">
@@ -318,7 +487,10 @@ export default function SessionPage() {
         <span className="font-mono text-sm font-bold tabular text-dim">{pct}%</span>
       </div>
 
-      {session.exercises.map((exercise, exIdx) => {
+      {blocks.map((block) => {
+        if (block.length > 1) return renderSuperset(block)
+        const exIdx = block[0]
+        const exercise = session.exercises[exIdx]
         const allDone = exercise.sets.every((s) => s.done)
         const isCollapsed = collapse[exercise.exerciseId] ?? allDone
         const timed = exercise.mode === "time"

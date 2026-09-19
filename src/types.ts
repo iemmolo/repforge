@@ -26,6 +26,11 @@ export interface Exercise {
   notes?: string
   /** "time" = held for duration (planks, hollow holds); default "reps" */
   mode?: "reps" | "time"
+  /**
+   * Superset group key. Consecutive exercises sharing a key are done as
+   * rounds — one set of each, then rest — instead of all sets back to back.
+   */
+  superset?: string
 }
 
 export type CardioType = "walk" | "run"
@@ -50,7 +55,7 @@ export interface Workout {
   cardio?: CardioTarget
 }
 
-export type ProgramCategory = "strength" | "hypertrophy" | "classics" | "minimalist" | "recovery"
+export type ProgramCategory = "strength" | "hypertrophy" | "classics" | "minimalist" | "recovery" | "rehab"
 
 export interface Program {
   id: string
@@ -84,6 +89,8 @@ export interface ExerciseLog {
   notes?: string
   /** "time" = each set's `reps` value is seconds held; default "reps" */
   mode?: "reps" | "time"
+  /** copied from the template's `superset` */
+  superset?: string
   sets: SetLog[]
 }
 

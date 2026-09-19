@@ -71,6 +71,30 @@ export function sameWeights(a: number[], b: number[]): boolean {
   return a.length === b.length && a.every((w, i) => w === b[i])
 }
 
+/**
+ * Split an exercise list into display blocks: a superset is a run of
+ * consecutive exercises sharing a `superset` key; everything else stands alone.
+ * Returns index lists into the original array.
+ */
+export function supersetBlocks(exercises: { superset?: string }[]): number[][] {
+  const blocks: number[][] = []
+  exercises.forEach((e, i) => {
+    const prev = blocks[blocks.length - 1]
+    if (prev && e.superset && exercises[prev[0]].superset === e.superset) prev.push(i)
+    else blocks.push([i])
+  })
+  return blocks
+}
+
+/** Drop superset keys from runs of one, so an unlinked leftover is a plain exercise again. */
+export function normalizeSupersets<T extends { superset?: string }>(exercises: T[]): T[] {
+  const out = [...exercises]
+  for (const block of supersetBlocks(out)) {
+    if (block.length === 1 && out[block[0]].superset) out[block[0]] = { ...out[block[0]], superset: undefined }
+  }
+  return out
+}
+
 export function fmtClock(totalSeconds: number): string {
   const s = Math.max(0, Math.ceil(totalSeconds))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
@@ -108,6 +132,7 @@ export const CATEGORY_LABELS: Record<string, string> = {
   classics: "Classics",
   minimalist: "Minimalist",
   recovery: "Recovery",
+  rehab: "Rehab",
 }
 
 export function logsThisWeek(logs: WorkoutLog[]): WorkoutLog[] {

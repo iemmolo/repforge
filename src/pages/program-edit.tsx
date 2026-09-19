@@ -1,12 +1,20 @@
 import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
-import { ArrowLeft, ChevronDown, Copy, Footprints, Plus, RotateCcw, Trash2 } from "lucide-react"
+import { ArrowLeft, ChevronDown, Copy, Footprints, Link2, Plus, RotateCcw, Trash2, Unlink2 } from "lucide-react"
 import { useStore } from "@/lib/store"
 import { PRESET_PROGRAMS } from "@/lib/seed"
 import { Stepper } from "@/components/stepper"
 import { Picker } from "@/components/picker"
 import { Confirm } from "@/components/confirm"
-import { CARDIO_LABELS, DAY_LABELS, WEEK_DAYS, fmtKg, plannedWeights, uid } from "@/lib/utils"
+import {
+  CARDIO_LABELS,
+  DAY_LABELS,
+  WEEK_DAYS,
+  fmtKg,
+  normalizeSupersets,
+  plannedWeights,
+  uid,
+} from "@/lib/utils"
 import type { CardioType, Exercise, Program, Workout } from "@/types"
 
 export default function ProgramEditPage() {
@@ -97,7 +105,39 @@ export default function ProgramEditPage() {
     if (!program) return
     const workout = program.workouts.find((w) => w.id === workoutId)
     if (!workout) return
-    patchWorkout(workoutId, { exercises: workout.exercises.filter((e) => e.id !== exerciseId) })
+    patchWorkout(workoutId, {
+      exercises: normalizeSupersets(workout.exercises.filter((e) => e.id !== exerciseId)),
+    })
+  }
+
+  /** Join exercise i and i+1 (and whatever superset i+1 was already in) into i's superset. */
+  function linkSuperset(workoutId: string, i: number) {
+    if (!program) return
+    const workout = program.workouts.find((w) => w.id === workoutId)
+    if (!workout) return
+    const exercises = [...workout.exercises]
+    const key = exercises[i].superset ?? uid()
+    const old = exercises[i + 1].superset
+    exercises[i] = { ...exercises[i], superset: key }
+    for (let j = i + 1; j < exercises.length; j++) {
+      if (j > i + 1 && (!old || exercises[j].superset !== old)) break
+      exercises[j] = { ...exercises[j], superset: key }
+    }
+    patchWorkout(workoutId, { exercises: normalizeSupersets(exercises) })
+  }
+
+  /** Split a superset between exercise i and i+1; the tail gets its own key. */
+  function unlinkSuperset(workoutId: string, i: number) {
+    if (!program) return
+    const workout = program.workouts.find((w) => w.id === workoutId)
+    if (!workout) return
+    const exercises = [...workout.exercises]
+    const key = exercises[i].superset
+    const fresh = uid()
+    for (let j = i + 1; j < exercises.length && exercises[j].superset === key; j++) {
+      exercises[j] = { ...exercises[j], superset: fresh }
+    }
+    patchWorkout(workoutId, { exercises: normalizeSupersets(exercises) })
   }
 
   function duplicate() {
@@ -308,14 +348,48 @@ export default function ProgramEditPage() {
                   </>
                 ) : (
                   <>
-                {workout.exercises.map((e) => (
-                  <ExerciseEditor
-                    key={e.id}
-                    exercise={e}
-                    onChange={(patch) => patchExercise(workout.id, e.id, patch)}
-                    onRemove={() => removeExercise(workout.id, e.id)}
-                  />
-                ))}
+                {workout.exercises.map((e, j) => {
+                  const next = workout.exercises[j + 1]
+                  const linked = next !== undefined && !!e.superset && e.superset === next.superset
+                  return (
+                    <div key={e.id} className="space-y-1">
+                      <ExerciseEditor
+                        exercise={e}
+                        onChange={(patch) => patchExercise(workout.id, e.id, patch)}
+                        onRemove={() => removeExercise(workout.id, e.id)}
+                      />
+                      {next && (
+                        <button
+                          type="button"
+                          className={`flex h-9 w-full items-center justify-center gap-1.5 text-[11px] font-bold uppercase tracking-wide ${
+                            linked
+                              ? "border border-volt-dim/60 text-volt active:bg-raised"
+                              : "text-faint active:text-dim"
+                          }`}
+                          onClick={() =>
+                            linked ? unlinkSuperset(workout.id, j) : linkSuperset(workout.id, j)
+                          }
+                        >
+                          {linked ? (
+                            <>
+                              <Link2 className="h-3.5 w-3.5" /> Superset — tap to split
+                            </>
+                          ) : (
+                            <>
+                              <Unlink2 className="h-3.5 w-3.5" /> Superset with next
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                {workout.exercises.some((e) => e.superset) && (
+                  <p className="text-xs text-dim">
+                    Supersets run in rounds — one set of each, then rest (the longest rest in
+                    the group).
+                  </p>
+                )}
 
                 <CardioEditor
                   cardio={workout.cardio}

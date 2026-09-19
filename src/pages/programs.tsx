@@ -6,7 +6,7 @@ import { PRESET_BY_ID, PRESET_PROGRAMS } from "@/lib/seed"
 import { CARDIO_LABELS, CATEGORY_LABELS, downloadBackup, fmtKg, uid } from "@/lib/utils"
 import type { AppState, Program } from "@/types"
 
-const CATEGORY_ORDER = ["strength", "hypertrophy", "classics", "minimalist", "recovery"] as const
+const CATEGORY_ORDER = ["strength", "hypertrophy", "classics", "minimalist", "recovery", "rehab"] as const
 
 function categoryOf(p: Program): string | undefined {
   return p.category ?? PRESET_BY_ID.get(p.id)?.category
@@ -217,7 +217,10 @@ function ProgramPreview({ program }: { program: Program }) {
             <ul className="mt-1 space-y-0.5">
               {w.exercises.map((e) => (
                 <li key={e.id} className="flex justify-between text-xs">
-                  <span className="text-dim">{e.name}</span>
+                  <span className="text-dim">
+                    {e.superset && <span className="font-mono font-bold text-volt-dim">SS </span>}
+                    {e.name}
+                  </span>
                   <span className="font-mono font-bold tabular text-faint">
                     {e.sets}×{e.targetReps}
                     {e.weightKg > 0 && ` @ ${fmtKg(e.weightKg)}kg`}

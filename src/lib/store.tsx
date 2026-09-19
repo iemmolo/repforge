@@ -232,6 +232,7 @@ export function buildSession(program: Program, workout: Workout): Session {
       restSeconds: e.restSeconds,
       notes: e.notes,
       mode: e.mode,
+      superset: e.superset,
       sets: Array.from({ length: e.sets }, (_, i) => ({
         done: false,
         reps: e.targetReps,
