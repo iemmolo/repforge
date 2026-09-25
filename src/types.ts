@@ -105,6 +105,8 @@ export interface Session {
   cardio?: CardioResult
   /** set only on class logs (workout kind "class" or quick-logged classes) */
   classMinutes?: number
+  /** free-text note on the whole workout, written from the session screen */
+  notes?: string
 }
 
 export interface WorkoutLog extends Session {

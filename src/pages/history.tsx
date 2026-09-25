@@ -94,6 +94,11 @@ export default function HistoryPage() {
                     </li>
                   )}
                 </ul>
+                {log.notes && (
+                  <p className="mt-3 whitespace-pre-wrap border-l-2 border-line pl-3 text-sm text-dim">
+                    {log.notes}
+                  </p>
+                )}
                 <button
                   type="button"
                   className="mt-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-danger"

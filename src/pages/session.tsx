@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import { useNavigate } from "react-router-dom"
 import {
   ArrowDownToLine,
@@ -94,6 +94,9 @@ export default function SessionPage() {
   const [savedWeights, setSavedWeights] = useState<Record<string, string>>({})
   // one prompt: "you changed this session — keep it in the program too?"
   const [persist, setPersist] = useState<{ body: string; run: () => void } | null>(null)
+  // long-press on a set row or superset round asks before deleting it
+  const [removing, setRemoving] = useState<{ title: string; body: string; run: () => void } | null>(null)
+  const [noteOpen, setNoteOpen] = useState(() => Boolean(state.session?.notes))
 
   // tick the live hold clock while a set is being timed
   useEffect(() => {
@@ -111,6 +114,10 @@ export default function SessionPage() {
   const pct = completionPercent(session.exercises, session.cardio)
   const program = state.programs.find((p) => p.id === session.programId)
   const blocks = supersetBlocks(session.exercises)
+  // the last time this workout was done (logs are newest first) — its note, if any, shows up top
+  const lastNote = state.logs.find(
+    (l) => l.programId === session.programId && l.workoutId === session.workoutId,
+  )
 
   function update(session: Session) {
     dispatch({ type: "updateSession", session })
@@ -250,6 +257,23 @@ export default function SessionPage() {
     })
   }
 
+  function templateFor(exerciseId: string): Exercise | undefined {
+    return program?.workouts
+      .find((w) => w.id === session?.workoutId)
+      ?.exercises.find((e) => e.id === exerciseId)
+  }
+
+  /** Offer to write a new set count back — unless the program already has it. */
+  function askPersistSets(exIdx: number, count: number) {
+    if (!session) return
+    const exercise = session.exercises[exIdx]
+    const template = templateFor(exercise.exerciseId)
+    if (!template || template.sets === count) return
+    askPersist(`Make ${exercise.name} ${count} sets in the program for next time?`, () =>
+      patchTemplate(exercise.exerciseId, { sets: count }),
+    )
+  }
+
   function addSet(exIdx: number) {
     if (!session) return
     const exercise = session.exercises[exIdx]
@@ -262,8 +286,45 @@ export default function SessionPage() {
         i === exIdx ? { ...e, targetSets: count, sets: [...e.sets, fresh] } : e,
       ),
     })
-    askPersist(`Make ${exercise.name} ${count} sets in the program for next time?`, () =>
-      patchTemplate(exercise.exerciseId, { sets: count }),
+    askPersistSets(exIdx, count)
+  }
+
+  function removeSet(exIdx: number, setIdx: number) {
+    if (!session) return
+    const exercise = session.exercises[exIdx]
+    if (exercise.sets.length <= 1) return
+    const count = exercise.sets.length - 1
+    // a running hold points at a set index that's about to shift
+    if (hold?.exIdx === exIdx) setHold(null)
+    update({
+      ...session,
+      exercises: session.exercises.map((e, i) =>
+        i === exIdx ? { ...e, targetSets: count, sets: e.sets.filter((_, j) => j !== setIdx) } : e,
+      ),
+    })
+    askPersistSets(exIdx, count)
+  }
+
+  /** Drops that round from every exercise in the superset, keeping rounds aligned. */
+  function removeRound(block: number[], round: number) {
+    if (!session) return
+    const count = Math.max(...block.map((i) => session.exercises[i].sets.length)) - 1
+    if (count < 1) return
+    const exercises = session.exercises.map((e, i) =>
+      !block.includes(i)
+        ? e
+        : { ...e, targetSets: count, sets: e.sets.filter((_, j) => j !== round) },
+    )
+    update({ ...session, exercises })
+    const changed = block.filter((i) => {
+      const template = templateFor(session.exercises[i].exerciseId)
+      return template && template.sets !== count
+    })
+    if (changed.length === 0) return
+    askPersist(`Make this superset ${count} rounds in ${program?.name} for next time?`, () =>
+      patchTemplates(
+        Object.fromEntries(block.map((i) => [session.exercises[i].exerciseId, { sets: count }])),
+      ),
     )
   }
 
@@ -388,7 +449,18 @@ export default function SessionPage() {
         {!isCollapsed && (
           <>
             {Array.from({ length: rounds }, (_, r) => (
-              <div key={r} className="border-b border-line/60">
+              <LongPress
+                key={r}
+                className="border-b border-line/60"
+                onLongPress={() =>
+                  rounds > 1 &&
+                  setRemoving({
+                    title: `Delete round ${r + 1}?`,
+                    body: "Removes this round from every exercise in the superset.",
+                    run: () => removeRound(block, r),
+                  })
+                }
+              >
                 <div className="flex items-center justify-between py-2 pr-2.5 pl-4">
                   <p
                     className={`font-mono text-xs font-bold uppercase ${
@@ -446,7 +518,7 @@ export default function SessionPage() {
                     )
                   })}
                 </div>
-              </div>
+              </LongPress>
             ))}
             <button
               type="button"
@@ -487,6 +559,15 @@ export default function SessionPage() {
         <span className="font-mono text-sm font-bold tabular text-dim">{pct}%</span>
       </div>
 
+      {lastNote?.notes && (
+        <div className="border-l-2 border-volt-dim bg-surface px-3 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-faint">
+            Note · {fmtDate(lastNote.date)}
+          </p>
+          <p className="whitespace-pre-wrap text-sm text-dim">{lastNote.notes}</p>
+        </div>
+      )}
+
       {blocks.map((block) => {
         if (block.length > 1) return renderSuperset(block)
         const exIdx = block[0]
@@ -498,9 +579,7 @@ export default function SessionPage() {
         const target = timed ? `${exercise.targetReps}s` : exercise.targetReps
 
         // ——— weight sync: what today uses vs. what the program has stored
-        const template = program?.workouts
-          .find((w) => w.id === session.workoutId)
-          ?.exercises.find((e) => e.id === exercise.exerciseId)
+        const template = templateFor(exercise.exerciseId)
         const weights = exercise.sets.map((s) => s.weightKg)
         const savedThis = savedWeights[exercise.exerciseId] === weights.join(",")
         const weightsDiffer =
@@ -609,7 +688,20 @@ export default function SessionPage() {
                     const active = hold?.exIdx === exIdx && hold?.setIdx === setIdx
                     const elapsed = active ? Math.round((holdNow - hold.startedAt) / 1000) : 0
                     return (
-                      <div key={setIdx} className="flex items-center gap-1.5 px-2.5 py-2">
+                      <LongPress
+                        key={setIdx}
+                        className="flex items-center gap-1.5 px-2.5 py-2"
+                        onLongPress={() =>
+                          exercise.sets.length > 1 &&
+                          setRemoving({
+                            title: `Delete set ${setIdx + 1}?`,
+                            body: timed
+                              ? `${set.reps}s ${exercise.name}`
+                              : `${set.reps} reps @ ${fmtKg(set.weightKg)}kg ${exercise.name}`,
+                            run: () => removeSet(exIdx, setIdx),
+                          })
+                        }
+                      >
                         <span className="w-5 shrink-0 font-mono text-xs font-bold text-faint">
                           {setIdx + 1}
                         </span>
@@ -676,7 +768,7 @@ export default function SessionPage() {
                         >
                           <Check className="h-5 w-5" strokeWidth={3} />
                         </button>
-                      </div>
+                      </LongPress>
                     )
                   })}
                 </div>
@@ -770,6 +862,29 @@ export default function SessionPage() {
         </section>
       )}
 
+      {noteOpen ? (
+        <label className="block">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-faint">Note</span>
+          <textarea
+            // focus on a fresh open, not when returning to a session that already has one
+            autoFocus={!session.notes}
+            rows={3}
+            className="mt-1 block w-full resize-none border border-line bg-surface px-3 py-2 text-base outline-none placeholder:text-faint focus:border-volt"
+            value={session.notes ?? ""}
+            onChange={(e) => update({ ...session, notes: e.target.value })}
+            placeholder="How did it go?"
+          />
+        </label>
+      ) : (
+        <button
+          type="button"
+          className="flex h-11 w-full items-center justify-center gap-1 text-xs font-semibold uppercase tracking-wide text-dim active:text-ink"
+          onClick={() => setNoteOpen(true)}
+        >
+          <Plus className="h-3.5 w-3.5" /> Add note
+        </button>
+      )}
+
       <button
         type="button"
         className="flex h-14 w-full items-center justify-center gap-2 bg-volt font-display text-lg text-carbon active:opacity-90"
@@ -803,6 +918,14 @@ export default function SessionPage() {
         cancelLabel="Just today"
         onConfirm={() => persist?.run()}
         onClose={() => setPersist(null)}
+      />
+      <Confirm
+        open={removing !== null}
+        title={removing?.title ?? ""}
+        body={removing?.body ?? ""}
+        confirmLabel="Delete"
+        onConfirm={() => removing?.run()}
+        onClose={() => setRemoving(null)}
       />
       <Confirm
         open={confirmDiscard}
@@ -1003,6 +1126,71 @@ function AddExerciseForm({
           Add
         </button>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Hold ~half a second to fire `onLongPress` — how sets and rounds get deleted
+ * without a button on every row. Moving (a scroll) cancels, and the click that
+ * follows the release is swallowed so the hold doesn't also tick a set or
+ * bump a stepper underneath the finger.
+ */
+function LongPress({
+  onLongPress,
+  className,
+  children,
+}: {
+  onLongPress: () => void
+  className: string
+  children: ReactNode
+}) {
+  const timer = useRef<number | undefined>(undefined)
+  const origin = useRef<{ x: number; y: number } | null>(null)
+  const fired = useRef(false)
+
+  function cancel() {
+    clearTimeout(timer.current)
+    origin.current = null
+  }
+
+  function release() {
+    cancel()
+    if (!fired.current) return
+    fired.current = false
+    // capture on document runs before React's listeners, wherever the click lands
+    const swallow = (e: Event) => {
+      e.stopPropagation()
+      e.preventDefault()
+    }
+    document.addEventListener("click", swallow, { capture: true, once: true })
+    setTimeout(() => document.removeEventListener("click", swallow, { capture: true }), 400)
+  }
+
+  return (
+    <div
+      className={`select-none [-webkit-touch-callout:none] ${className}`}
+      onPointerDown={(e) => {
+        // leave the stepper's type-a-value input alone
+        if ((e.target as HTMLElement).closest("input")) return
+        fired.current = false
+        origin.current = { x: e.clientX, y: e.clientY }
+        timer.current = window.setTimeout(() => {
+          fired.current = true
+          origin.current = null
+          navigator.vibrate?.(15)
+          onLongPress()
+        }, 500)
+      }}
+      onPointerMove={(e) => {
+        const o = origin.current
+        if (o && Math.hypot(e.clientX - o.x, e.clientY - o.y) > 10) cancel()
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {children}
     </div>
   )
 }

@@ -80,6 +80,7 @@ function reducer(state: AppState, action: Action): AppState {
         ...state.session,
         id: uid(),
         completedAt: new Date().toISOString(),
+        notes: state.session.notes?.trim() || undefined,
       }
       return { ...state, session: null, logs: [log, ...state.logs] }
     }
